@@ -1,0 +1,1352 @@
+# ESP01(S) generic.
+#
+# Decodes iCharger logging strings via UART and MODBUS.
+#
+# BEWARE component count is limited when using ESP01.
+# Some components are commented to stay within this limit.
+#
+# Ensure your iCharger settings match the UART block below.
+
+substitutions:
+  devicename: "esp01-icharger-bridge" # use for network related items
+  deviceid: "esp01_icharger_bridge" # use for component IDs and names
+
+esphome:
+  name: ${devicename}
+  platform: ESP8266
+  board: esp01_1m
+
+wifi:
+  ssid: !secret ssid_home
+  password: !secret pass_home
+  fast_connect: true
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+#  ap:
+#    ssid: "${devicename}"
+#    password: !secret pass_ap
+
+#captive_portal:
+
+#web_server:
+#  port: 80
+
+logger:
+  baud_rate: 0 # disable logging over UART
+
+# Enable Home Assistant API
+api:
+
+ota:
+
+switch:
+  - platform: restart
+    name: "${deviceid} Restart"
+
+
+########################### UART / MODBUS ###########################
+uart:
+  id: uart1
+  tx_pin: GPIO1
+  rx_pin: GPIO3
+  baud_rate: 115200
+  stop_bits: 1
+  parity: even
+
+
+modbus:
+  id: modbus1
+
+modbus_controller:
+  - id: icharger_modbus
+    address: 0x1
+    modbus_id: modbus1
+    setup_priority: -10
+    update_interval: 10s
+
+binary_sensor:
+  - platform: status
+    name: "${deviceid} API status"
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 is running"
+    id: ${deviceid}_ch1_is_running
+    register_type: read
+    address: 0x000b
+    bitmask: 0x04
+
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 has error"
+#    id: ${deviceid}_ch1_has_error
+#    register_type: read
+#    address: 0x000b
+#    bitmask: 0x02
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 is running"
+    id: ${deviceid}_ch2_is_running
+    register_type: read
+    address: 0x000c
+    bitmask: 0x04
+
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 has error"
+#    id: ${deviceid}_ch2_has_error
+#    register_type: read
+#    address: 0x000c
+#    bitmask: 0x02
+  
+
+sensor:
+  - platform: wifi_signal
+    name: "${deviceid} WiFi Signal"
+    update_interval: 60s
+  - platform: template
+    id: "${deviceid}_CH2_max_cell_voltage"
+    name: "${deviceid} CH2 max cell voltage"
+    update_interval: 10s
+    accuracy_decimals: 3
+    state_class: "measurement"
+    unit_of_measurement: "V"
+    lambda: |-
+      float cells[ 10 ] = { id(${deviceid}_ch2_c01_voltage).state, id(${deviceid}_ch2_c02_voltage).state, id(${deviceid}_ch2_c03_voltage).state, id(${deviceid}_ch2_c04_voltage).state, id(${deviceid}_ch2_c05_voltage).state, id(${deviceid}_ch2_c06_voltage).state, id(${deviceid}_ch2_c07_voltage).state, id(${deviceid}_ch2_c08_voltage).state, id(${deviceid}_ch2_c09_voltage).state, id(${deviceid}_ch2_c10_voltage).state };
+      byte maxCellIndex = 0;
+      //int maxValue = cells[maxIndex];
+      
+      for( byte i=0; i < 10; i++ )
+      {
+          if( cells[ i ] > cells[ maxCellIndex ] )
+          {
+              maxCellIndex = i;
+          }
+      }
+      return cells[ maxCellIndex ];
+  - platform: template
+    id: "${deviceid}_CH2_min_cell_voltage"
+    name: "${deviceid} CH2 min cell voltage"
+    update_interval: 10s
+    accuracy_decimals: 3
+    state_class: "measurement"
+    unit_of_measurement: "V"
+    lambda: |-
+      float cells[ 10 ] = { id(${deviceid}_ch2_c01_voltage).state, id(${deviceid}_ch2_c02_voltage).state, id(${deviceid}_ch2_c03_voltage).state, id(${deviceid}_ch2_c04_voltage).state, id(${deviceid}_ch2_c05_voltage).state, id(${deviceid}_ch2_c06_voltage).state, id(${deviceid}_ch2_c07_voltage).state, id(${deviceid}_ch2_c08_voltage).state, id(${deviceid}_ch2_c09_voltage).state, id(${deviceid}_ch2_c10_voltage).state };
+      byte maxCellIndex = 0;
+      
+      for( byte i=0; i < 10; i++ )
+      {
+          if( cells[ i ] <= 0.0 ) continue;
+          if( cells[ i ] < cells[ maxCellIndex ] )
+          {
+              maxCellIndex = i;
+          }
+      }
+      return cells[ maxCellIndex ];
+  - platform: template
+    id: "${deviceid}_CH2_cell_voltage_range"
+    name: "${deviceid} CH2 cell voltage range"
+    update_interval: 10s
+    accuracy_decimals: 3
+    state_class: "measurement"
+    unit_of_measurement: "V"
+    lambda: |-
+      return id(${deviceid}_CH2_max_cell_voltage).state - id(${deviceid}_CH2_min_cell_voltage).state;
+  - platform: template
+    id: "${deviceid}_CH2_avg_cell_voltage"
+    name: "${deviceid} CH2 average cell voltage"
+    update_interval: 10s
+    accuracy_decimals: 3
+    state_class: "measurement"
+    unit_of_measurement: "V"
+    lambda: |-
+      float cells[ 10 ] = { id(${deviceid}_ch2_c01_voltage).state, id(${deviceid}_ch2_c02_voltage).state, id(${deviceid}_ch2_c03_voltage).state, id(${deviceid}_ch2_c04_voltage).state, id(${deviceid}_ch2_c05_voltage).state, id(${deviceid}_ch2_c06_voltage).state, id(${deviceid}_ch2_c07_voltage).state, id(${deviceid}_ch2_c08_voltage).state, id(${deviceid}_ch2_c09_voltage).state, id(${deviceid}_ch2_c10_voltage).state };
+      float cellAvg = cells[ 0 ];
+      //byte n = 1;
+      
+      for( byte i=1; i < 10; i++ )
+      {
+          if( cells[ i ] > 0.0 )
+          {
+              cellAvg += cells[ i ];
+              cellAvg /= 2;
+          }
+      }
+      //cellAvg /= n;
+      return cellAvg;
+
+### INFORMATION ###
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 general status"
+    id: ${deviceid}_ch1_gen_status
+    register_type: read
+    address: 0x000b
+    value_type: U_WORD
+#    lambda: |-
+#      std::string r;
+#      x = (int)x;
+#      while(x!=0) {r=(x%2==0 ?"0":"1")+r; x/=2;}
+#      return r;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 general status"
+    id: ${deviceid}_ch2_gen_status
+    register_type: read
+    address: 0x000c
+    value_type: U_WORD
+#    lambda: |-
+#      std::string r;
+#      x = (int)x;
+#      while(x!=0) {r=(x%2==0 ?"0":"1")+r; x/=2;}
+#      return r;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "Device ID"
+    id: ${deviceid}_device_id
+    register_type: read
+    address: 0x0000
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "Software version"
+    id: ${deviceid}_software_ver
+    register_type: read
+    address: 0x0007
+    # offset: 7
+    value_type: U_WORD
+  
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "Input Voltage"
+    id: ${deviceid}_input_voltage
+    register_type: read
+    address: 0x0105
+    value_type: U_WORD
+    accuracy_decimals: 1
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+### CHANNEL 1 ###
+
+# todo. add TIME component and do the maths for proper timestamp
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 timestamp"
+    id: ${deviceid}_ch1_timestamp
+    register_type: read
+    address: 0x0100
+    value_type: U_DWORD_R
+    accuracy_decimals: 0
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Power"
+    id: ${deviceid}_ch1_power
+    register_type: read
+    address: 0x0102
+    value_type: S_DWORD_R
+    accuracy_decimals: 0
+    device_class: "power"
+    state_class: "measurement"
+    unit_of_measurement: 'W'
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Current"
+    id: ${deviceid}_ch1_current
+    register_type: read
+    address: 0x0104
+    value_type: S_WORD
+    accuracy_decimals: 2
+    device_class: "current"
+    state_class: "measurement"
+    unit_of_measurement: 'A'
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    id: ${deviceid}_ch1_voltage
+    name: "CH1 Voltage"
+    register_type: read
+    address: 0x0106
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Capacity"
+    id: ${deviceid}_ch1_capacity
+    register_type: read
+    address: 0x0107
+    value_type: S_DWORD_R
+    accuracy_decimals: 3
+    device_class: "energy"
+    state_class: "measurement"
+    unit_of_measurement: 'Ah'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Internal Temp"
+    id: ${deviceid}_ch1_int_temp
+    register_type: read
+    address: 0x0109
+    value_type: S_WORD
+    accuracy_decimals: 0
+    device_class: "temperature"
+    state_class: "measurement"
+    unit_of_measurement: "°C"
+    lambda: return x / 10;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 External Temp"
+    id: ${deviceid}_ch1_ext_temp
+    register_type: read
+    address: 0x010a
+    value_type: S_WORD
+    accuracy_decimals: 0
+    device_class: "temperature"
+    state_class: "measurement"
+    unit_of_measurement: "°C"
+    lambda: return x / 10;
+
+### CH1 CELL VOLTAGES ###
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cell 01 Voltage"
+    id: ${deviceid}_ch1_c01_voltage
+    register_type: read
+    address: 0x010b
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cell 02 Voltage"
+    id: ${deviceid}_ch1_c02_voltage
+    register_type: read
+    address: 0x010c
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cell 03 Voltage"
+    id: ${deviceid}_ch1_c03_voltage
+    register_type: read
+    address: 0x010d
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cell 04 Voltage"
+    id: ${deviceid}_ch1_c04_voltage
+    register_type: read
+    address: 0x010e
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cell 05 Voltage"
+    id: ${deviceid}_ch1_c05_voltage
+    register_type: read
+    address: 0x010f
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cell 06 Voltage"
+    id: ${deviceid}_ch1_c06_voltage
+    register_type: read
+    address: 0x0110
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cell 07 Voltage"
+    id: ${deviceid}_ch1_c07_voltage
+    register_type: read
+    address: 0x0111
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cell 08 Voltage"
+    id: ${deviceid}_ch1_c08_voltage
+    register_type: read
+    address: 0x0112
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cell 09 Voltage"
+    id: ${deviceid}_ch1_c09_voltage
+    register_type: read
+    address: 0x0113
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cell 10 Voltage"
+    id: ${deviceid}_ch1_c10_voltage
+    register_type: read
+    address: 0x0114
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+
+
+
+
+### CH1 BALANCE STATUS ###
+
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 C01 Balance Status"
+#    id: ${deviceid}_ch1_c01_balance
+#    register_type: read
+#    address: 0x011b
+#    bitmask: 0x00ff0000
+#    value_type: U_DWORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 C02 Balance Status"
+#    id: ${deviceid}_ch1_c02_balance
+#    register_type: read
+#    address: 0x011b
+#    bitmask: 0xff000000
+#    value_type: U_DWORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 C03 Balance Status"
+#    id: ${deviceid}_ch1_c03_balance
+#    register_type: read
+#    address: 0x011b
+#    bitmask: 0x000000ff
+#    value_type: U_DWORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 C04 Balance Status"
+#    id: ${deviceid}_ch1_c04_balance
+#    register_type: read
+#    address: 0x011b
+#    bitmask: 0x0000ff00
+#    value_type: U_DWORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 C05 Balance Status"
+#    id: ${deviceid}_ch1_c05_balance
+#    register_type: read
+#    address: 0x011d
+#    bitmask: 0x00ff0000
+#    value_type: U_DWORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 C06 Balance Status"
+#    id: ${deviceid}_ch1_c06_balance
+#    register_type: read
+#    address: 0x011d
+#    bitmask: 0xff000000
+#    value_type: U_DWORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 C07 Balance Status"
+#    id: ${deviceid}_ch1_c07_balance
+#    register_type: read
+#    address: 0x011d
+#    bitmask: 0x000000ff
+#    value_type: U_DWORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 C08 Balance Status"
+#    id: ${deviceid}_ch1_c08_balance
+#    register_type: read
+#    address: 0x011d
+#    bitmask: 0x0000ff00
+#    value_type: U_DWORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 C09 Balance Status"
+#    id: ${deviceid}_ch1_c09_balance
+#    register_type: read
+#    address: 0x011f
+#    bitmask: 0x00ff
+#    value_type: U_WORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH1 C10 Balance Status"
+#    id: ${deviceid}_ch1_c10_balance
+#    register_type: read
+#    address: 0x011f
+#    bitmask: 0xff00
+#    value_type: U_WORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+
+### CH1 CELL RESISTANCE ###
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 C01 Resistance"
+    id: ${deviceid}_ch1_c01_res
+    register_type: read
+    address: 0x0123
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 C02 Resistance"
+    id: ${deviceid}_ch1_c02_res
+    register_type: read
+    address: 0x0124
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 C03 Resistance"
+    id: ${deviceid}_ch1_c03_res
+    register_type: read
+    address: 0x0125
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 C04 Resistance"
+    id: ${deviceid}_ch1_c04_res
+    register_type: read
+    address: 0x0126
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 C05 Resistance"
+    id: ${deviceid}_ch1_c05_res
+    register_type: read
+    address: 0x0127
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 C06 Resistance"
+    id: ${deviceid}_ch1_c06_res
+    register_type: read
+    address: 0x0128
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 C07 Resistance"
+    id: ${deviceid}_ch1_c07_res
+    register_type: read
+    address: 0x0129
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 C08 Resistance"
+    id: ${deviceid}_ch1_c08_res
+    register_type: read
+    address: 0x012a
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 C09 Resistance"
+    id: ${deviceid}_ch1_c09_res
+    register_type: read
+    address: 0x012b
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 C10 Resistance"
+    id: ${deviceid}_ch1_c10_res
+    register_type: read
+    address: 0x012c
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+### CHANNEL 1 INFO ###
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Total Internal Resistance"
+    id: ${deviceid}_ch1_tot_int_res
+    register_type: read
+    address: 0x0133
+    value_type: U_WORD
+    accuracy_decimals: 1
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 10;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cable Resistance"
+    id: ${deviceid}_ch1_cable_res
+    register_type: read
+    address: 0x0134
+    value_type: U_WORD
+    accuracy_decimals: 1
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 10;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Cycle Count"
+    id: ${deviceid}_ch1_cycle_cnt
+    register_type: read
+    address: 0x0135
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Control Status"
+    id: ${deviceid}_ch1_control_status
+    register_type: read
+    address: 0x0136
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH1 Run Status"
+    id: ${deviceid}_ch1_run_status
+    register_type: read
+    address: 0x0137
+    value_type: U_WORD
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### CHANNEL 2 ###
+
+# todo. add TIME component and do the maths for proper timestamp
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "Ch2 timestamp"
+    id: ${deviceid}_ch2_timestamp
+    register_type: read
+    address: 0x0200
+    value_type: U_DWORD_R
+    filters:
+      - lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Power"
+    id: ${deviceid}_ch2_power
+    register_type: read
+    address: 0x0202
+    value_type: S_DWORD_R
+    accuracy_decimals: 0
+    device_class: "power"
+    state_class: "measurement"
+    unit_of_measurement: 'W'
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Current"
+    id: ${deviceid}_ch2_current
+    register_type: read
+    address: 0x0204
+    value_type: S_WORD
+    accuracy_decimals: 2
+    device_class: "current"
+    state_class: "measurement"
+    unit_of_measurement: 'A'
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    id: ${deviceid}_ch2_voltage
+    name: "CH2 Voltage"
+    register_type: read
+    address: 0x0206
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Capacity"
+    id: ${deviceid}_ch2_capacity
+    register_type: read
+    address: 0x0207
+    value_type: S_DWORD_R
+    accuracy_decimals: 3
+    device_class: "energy"
+    state_class: "measurement"
+    unit_of_measurement: 'Ah'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Internal Temp"
+    id: ${deviceid}_ch2_int_temp
+    register_type: read
+    address: 0x0209
+    value_type: S_WORD
+    accuracy_decimals: 0
+    device_class: "temperature"
+    state_class: "measurement"
+    unit_of_measurement: "°C"
+    lambda: return x / 10;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 External Temp"
+    id: ${deviceid}_ch2_ext_temp
+    register_type: read
+    address: 0x020a
+    value_type: S_WORD
+    accuracy_decimals: 0
+    device_class: "temperature"
+    state_class: "measurement"
+    unit_of_measurement: "°C"
+    lambda: return x / 10;
+
+### CH2 CELL VOLTAGES ###
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cell 01 Voltage"
+    id: ${deviceid}_ch2_c01_voltage
+    register_type: read
+    address: 0x020b
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cell 02 Voltage"
+    id: ${deviceid}_ch2_c02_voltage
+    register_type: read
+    address: 0x020c
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cell 03 Voltage"
+    id: ${deviceid}_ch2_c03_voltage
+    register_type: read
+    address: 0x020d
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cell 04 Voltage"
+    id: ${deviceid}_ch2_c04_voltage
+    register_type: read
+    address: 0x020e
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cell 05 Voltage"
+    id: ${deviceid}_ch2_c05_voltage
+    register_type: read
+    address: 0x020f
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cell 06 Voltage"
+    id: ${deviceid}_ch2_c06_voltage
+    register_type: read
+    address: 0x0210
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cell 07 Voltage"
+    id: ${deviceid}_ch2_c07_voltage
+    register_type: read
+    address: 0x0211
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cell 08 Voltage"
+    id: ${deviceid}_ch2_c08_voltage
+    register_type: read
+    address: 0x0212
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cell 09 Voltage"
+    id: ${deviceid}_ch2_c09_voltage
+    register_type: read
+    address: 0x0213
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cell 10 Voltage"
+    id: ${deviceid}_ch2_c10_voltage
+    register_type: read
+    address: 0x0214
+    value_type: U_WORD
+    accuracy_decimals: 3
+    device_class: "voltage"
+    state_class: "measurement"
+    unit_of_measurement: 'V'
+    lambda: return x / 1e3;
+
+
+### CH2 BALANCE STATUS ###
+
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 C01 Balance Status"
+#    id: ${deviceid}_ch2_c01_balance
+#    register_type: read
+#    address: 0x021b
+#    bitmask: 0x00ff0000
+#    value_type: U_DWORD_R
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 C02 Balance Status"
+#    id: ${deviceid}_ch2_c02_balance
+#    register_type: read
+#    address: 0x021b
+#    bitmask: 0xff000000
+#    value_type: U_DWORD_R
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 C03 Balance Status"
+#    id: ${deviceid}_ch2_c03_balance
+#    register_type: read
+#    address: 0x021b
+#    bitmask: 0x000000ff
+#    value_type: U_DWORD_R
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 C04 Balance Status"
+#    id: ${deviceid}_ch2_c04_balance
+#    register_type: read
+#    address: 0x021b
+#    bitmask: 0x0000ff00
+#    value_type: U_DWORD_R
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 C05 Balance Status"
+#    id: ${deviceid}_ch2_c05_balance
+#    register_type: read
+#    address: 0x021d
+#    bitmask: 0x00ff0000
+#    value_type: U_DWORD_R
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 C06 Balance Status"
+#    id: ${deviceid}_ch2_c06_balance
+#    register_type: read
+#    address: 0x021d
+#    bitmask: 0xff000000
+#    value_type: U_DWORD_R
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 C07 Balance Status"
+#    id: ${deviceid}_ch2_c07_balance
+#    register_type: read
+#    address: 0x021d
+#    bitmask: 0x000000ff
+#    value_type: U_DWORD_R
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 C08 Balance Status"
+#    id: ${deviceid}_ch2_c08_balance
+#    register_type: read
+#    address: 0x021d
+#    bitmask: 0x0000ff00
+#    value_type: U_DWORD_R
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 C09 Balance Status"
+#    id: ${deviceid}_ch2_c09_balance
+#    register_type: read
+#    address: 0x021f
+#    bitmask: 0x00ff
+#    value_type: U_WORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+#
+#  - platform: modbus_controller
+#    modbus_controller_id: icharger_modbus
+#    name: "CH2 C10 Balance Status"
+#    id: ${deviceid}_ch2_c10_balance
+#    register_type: read
+#    address: 0x021f
+#    bitmask: 0xff00
+#    value_type: U_WORD
+#    accuracy_decimals: 0
+#    device_class: "power_factor"
+#    state_class: "measurement"
+#    unit_of_measurement: '%'
+#    lambda: return ( x / 16 ) * 100;
+
+
+
+
+
+### CH2 CELL RESISTANCE ###
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 C01 Resistance"
+    id: ${deviceid}_ch2_c01_res
+    register_type: read
+    address: 0x0223
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 C02 Resistance"
+    id: ${deviceid}_ch2_c02_res
+    register_type: read
+    address: 0x0224
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 C03 Resistance"
+    id: ${deviceid}_ch2_c03_res
+    register_type: read
+    address: 0x0225
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 C04 Resistance"
+    id: ${deviceid}_ch2_c04_res
+    register_type: read
+    address: 0x0226
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 C05 Resistance"
+    id: ${deviceid}_ch2_c05_res
+    register_type: read
+    address: 0x0227
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 C06 Resistance"
+    id: ${deviceid}_ch2_c06_res
+    register_type: read
+    address: 0x0228
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 C07 Resistance"
+    id: ${deviceid}_ch2_c07_res
+    register_type: read
+    address: 0x0229
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 C08 Resistance"
+    id: ${deviceid}_ch2_c08_res
+    register_type: read
+    address: 0x022a
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 C09 Resistance"
+    id: ${deviceid}_ch2_c09_res
+    register_type: read
+    address: 0x022b
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 C10 Resistance"
+    id: ${deviceid}_ch2_c10_res
+    register_type: read
+    address: 0x022c
+    value_type: U_WORD
+    accuracy_decimals: 2
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 1e2;
+
+
+
+
+
+### CHANNEL 2 INFO ###
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Total Internal Resistance"
+    id: ${deviceid}_ch2_tot_int_res
+    register_type: read
+    address: 0x0233
+    value_type: U_WORD
+    accuracy_decimals: 1
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 10;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cable Resistance"
+    id: ${deviceid}_ch2_cable_res
+    register_type: read
+    address: 0x0234
+    value_type: U_WORD
+    accuracy_decimals: 1
+    state_class: "measurement"
+    unit_of_measurement: "mΩ"
+    lambda: return x / 10;
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Cycle Count"
+    id: ${deviceid}_ch2_cycle_cnt
+    register_type: read
+    address: 0x0235
+    value_type: U_WORD
+    state_class: "measurement"
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Control Status"
+    id: ${deviceid}_ch2_control_status
+    register_type: read
+    address: 0x0236
+    value_type: U_WORD
+
+  - platform: modbus_controller
+    modbus_controller_id: icharger_modbus
+    name: "CH2 Run Status"
+    id: ${deviceid}_ch2_run_status
+    register_type: read
+    address: 0x0237
+    value_type: U_WORD
