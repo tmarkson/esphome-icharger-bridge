@@ -13,7 +13,7 @@ Use this device with [Home Assistant](https://www.home-assistant.io/) for bonus 
 - good introduction to Esphome since the hardware is simple.
 
 ### Usage
-1. Configure iCharger to output Modbus instead of USB communication. See [manual](https://github.com/tmarkson/esphome-icharger-bridge/media/iCharger_MODBUS_Protocol.pdf).
+1. Configure iCharger to output Modbus instead of USB communication. See [manual](https://github.com/tmarkson/esphome-icharger-bridge/blob/main/media/iCharger_MODBUS_Protocol.pdf).
 
 1. Connect ESP device to iCharger using the wiring below.
 1. Install esphome on your PC, or use it within another framework such as Home Assistant.
@@ -36,7 +36,7 @@ The below connections use hardware UART ports to allow faster baud rates and les
 | -             | VCC           | 3.3V OUTPUT   |
 
 
-<img src="https://github.com/tmarkson/esphome-icharger-bridge/media/wiring.png" alt="connections image" width="400"/><br />
+<img src="https://github.com/tmarkson/esphome-icharger-bridge/blob/main/media/wiring.png" alt="connections image" width="400"/><br />
 Credit: Junsi Modbus protocol manual
 
 <img src="https://s3.amazonaws.com/assets.flitetest.com/article_images/full/icharger10-jpg_1364406006.jpg" alt="image. J1 and J2 port for Modbus" width="400"/><br />
